@@ -1,11 +1,12 @@
 import time
 import pygame
 import cmath
+import math
 from math import pi, tau
 
 
 class Gear:
-    def __init__(self, theta, theta_velocity, rotation, radius, inner_radius, pen_holes, parent=None):
+    def __init__(self, theta, theta_velocity, rotation, radius, inner_radius, pen_holes, color, parent=None):
         # Theta and theta velocity relative to the parent
         self.theta = theta
         self.theta_velocity = theta_velocity
@@ -17,6 +18,8 @@ class Gear:
         self.inner_radius = inner_radius
         # Holes for the pen in polar coordinates from the center of the gear
         self.pen_holes = pen_holes or []
+        # Color of the gear
+        self.color = color
         # The parent gear to which this one is attached
         self.parent = parent
 
@@ -30,6 +33,8 @@ class Gear:
         if self.parent is not None:
             rotation_delta = theta_delta * (self.parent.inner_radius / self.radius)  # ??
             self.rotation -= rotation_delta
+
+            self.parent.update(elapsed)
 
     # Translates a position in this gear's polar coordinates to page coordinates
     def translate_to_page(self, position) -> tuple:
@@ -73,19 +78,23 @@ pygame.init()
 clock = pygame.time.Clock()
 
 # Set up the drawing window
-screen = pygame.display.set_mode([1200, 800])
+screen = pygame.display.set_mode([1400, 1000])
 graph = pygame.surface.Surface([screen.get_width(), screen.get_height()])
 
 # Fill the background
 graph.fill((255, 255, 255))
 
+start = time.time_ns()
 previous = time.time_ns()
 frame = 0
 
 center = (screen.get_width() // 2, screen.get_height() // 2)
-outer_gear = Gear(0, 0, 0, 550, 473, [])
-middle_gear = Gear(0, 0, 0, 550, 473, [])
-inner_gear = Gear(0, tau, 0, 200, 0, [(137, 0)], outer_gear)
+
+outer_gear = Gear(0, 0, 0, 550, 473, [], (0, 0, 255))
+middle_gear = Gear(0, tau, 0, 350, 275, [], (0, 255, 255), outer_gear)
+inner_gear = Gear(0, tau, 0, 150, 0, [(97, 0)], (0, 255, 0), middle_gear)
+gears = [outer_gear, middle_gear, inner_gear]
+
 pen = Pen(inner_gear, inner_gear.pen_holes[0], 2, (255, 0, 0))
 
 previous_pen_position = pen.get_position_on_page()
@@ -97,6 +106,15 @@ def to_screen(coords):
     return (
         int(x + center[0]),
         int(y + center[1])
+    )
+
+
+def color_for_time(time):
+    period = (2, 1, 4)
+    return (
+        int((math.sin(time / period[0]) + 1) * 0.5 * 200),
+        int((math.sin(time / period[1]) + 1) * 0.5 * 200),
+        int((math.sin(time / period[2]) + 1) * 0.5 * 200)
     )
 
 
@@ -116,16 +134,20 @@ while running:
     pen.update(elapsed)
     pen_position = pen.get_position_on_page()
 
-    pygame.draw.line(graph, pen.color, to_screen(previous_pen_position), to_screen(pen_position), pen.thickness)
+    total_time = (time.time_ns() - start) / 1e9
+    changing_color = color_for_time(total_time)
+    pygame.draw.line(graph, changing_color, to_screen(previous_pen_position), to_screen(pen_position), pen.thickness)
     screen.blit(graph, (0, 0))
 
-    pygame.draw.circle(screen, (0, 0, 255), center, outer_gear.radius, 1)
-    pygame.draw.circle(screen, (0, 0, 255), center, outer_gear.inner_radius, 1)
+    for gear in gears:
+        gear_center = to_screen(gear.translate_to_page((0, 0)))
+        gear_top = to_screen(gear.translate_to_page((gear.radius, pi / 2)))
 
-    inner_gear_center = inner_gear.translate_to_page((0, 0))
-    inner_gear_top = inner_gear.translate_to_page((inner_gear.radius, 0))
-    pygame.draw.circle(screen, (0, 255, 0), to_screen(inner_gear_center), inner_gear.radius, 1)
-    pygame.draw.line(screen, (0, 255, 0), to_screen(inner_gear_center), to_screen(inner_gear_top), 1)
+        pygame.draw.circle(screen, gear.color, gear_center, gear.radius, 3)
+        if gear.inner_radius > 0:
+            pygame.draw.circle(screen, gear.color, gear_center, gear.inner_radius, 3)
+
+        pygame.draw.line(screen, gear.color, to_screen(gear_center), to_screen(gear_top), 1)
 
     # Remember the current pen position for next loop
     previous_pen_position = pen_position
@@ -137,7 +159,6 @@ while running:
     if frame % 60 == 0:
         print(clock.get_fps())
     clock.tick(600)
-
 
 # Done! Time to quit.
 pygame.quit()
