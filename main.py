@@ -86,26 +86,29 @@ graph.fill((255, 255, 255))
 
 start = time.time_ns()
 previous = time.time_ns()
-frame = 0
 
 center = (screen.get_width() // 2, screen.get_height() // 2)
 
-outer_gear = Gear(0, 0, 0, 550, 473, [], (0, 0, 255))
-middle_gear = Gear(0, tau, 0, 350, 275, [], (0, 255, 255), outer_gear)
-inner_gear = Gear(0, tau, 0, 150, 0, [(97, 0)], (0, 255, 0), middle_gear)
-gears = [outer_gear, middle_gear, inner_gear]
+# outer_gear = Gear(0, 0, 0, 550, 473, [], (0, 0, 255))
+# middle_gear = Gear(0, tau, 0, 350, 275, [], (0, 255, 255), outer_gear)
+# inner_gear = Gear(0, tau, 0, 150, 0, [(97, 0)], (0, 255, 0), middle_gear)
+# gears = [outer_gear, middle_gear, inner_gear]
+
+outer_gear = Gear(0, 0, 0, 450, 397, [], (0, 0, 255))
+inner_gear = Gear(0, tau * 2, 0, 150, 0, [(97, 0)], (0, 255, 0), outer_gear)
+gears = [outer_gear, inner_gear]
 
 pen = Pen(inner_gear, inner_gear.pen_holes[0], 2, (255, 0, 0))
 
 previous_pen_position = pen.get_position_on_page()
 
 
-def to_screen(coords):
-    global center
-    x, y = coords
+def to_screen(page_coordinates):
+    global center, screen
+    x, y = page_coordinates
     return (
         int(x + center[0]),
-        int(y + center[1])
+        screen.get_height() - int(y + center[1])
     )
 
 
@@ -118,12 +121,26 @@ def color_for_time(time):
     )
 
 
+frames = 0
+
 # Run until the user asks to quit
 running = True
 while running:
     now = time.time_ns()
     elapsed = (now - previous) / 1e9
+    frames += 1
+    if now // 1e9 != previous // 1e9:
+        print(frames)
+        frames = 0
+
+    # Flip the display
+    if now // (1e9 / 60) != previous // (1e9 / 60):
+        pygame.display.flip()
+
     previous = now
+
+    if elapsed > (1e9 / 30):
+        continue
 
     # Did the user click the window close button?
     for event in pygame.event.get():
@@ -141,24 +158,22 @@ while running:
 
     for gear in gears:
         gear_center = to_screen(gear.translate_to_page((0, 0)))
+        gear_inner_top = to_screen(gear.translate_to_page((gear.inner_radius, pi / 2)))
         gear_top = to_screen(gear.translate_to_page((gear.radius, pi / 2)))
 
         pygame.draw.circle(screen, gear.color, gear_center, gear.radius, 3)
         if gear.inner_radius > 0:
             pygame.draw.circle(screen, gear.color, gear_center, gear.inner_radius, 3)
 
-        pygame.draw.line(screen, gear.color, to_screen(gear_center), to_screen(gear_top), 1)
+        pygame.draw.line(screen, gear.color, gear_inner_top, gear_top, 2)
+
+    pygame.draw.circle(screen, pen.gear.color, to_screen(pen_position), 5, 2)
 
     # Remember the current pen position for next loop
     previous_pen_position = pen_position
 
-    # Flip the display
-    pygame.display.flip()
-
-    frame += 1
-    if frame % 60 == 0:
-        print(clock.get_fps())
-    clock.tick(600)
+    target_fps = 600
+    # clock.tick(target_fps)
 
 # Done! Time to quit.
 pygame.quit()
